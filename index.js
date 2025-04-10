@@ -102,7 +102,7 @@ app.post('/log', async (req, res) => {
 
   // Отправляем данные в CRM
   try {
-    const crmResponse = await fetch('https://api.dntrade.com.ua/orders_upload', {
+    const crmResponse = await fetch('https://api.dntrade.com.ua/orders/upload', {
       method: 'POST',
       headers: {
         'accept': 'application/json',
