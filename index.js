@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; // Для Render/Glitch используем PORT из окружения
 
 app.use(express.json()); // Для парсинга JSON в теле запроса
 
@@ -15,23 +15,47 @@ const arrProduct = [
   },
 ];
 
+// Логируем все входящие запросы для отладки
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// Обработчик для корневого маршрута
+app.get('/', (req, res) => {
+  res.send('Сервер работает. Используйте POST /log для Webhook.');
+});
+
 app.post('/log', async (req, res) => {
   const tildaData = req.body;
 
   // Выводим полученные данные для отладки
   console.log('Получено с сайта:', JSON.stringify(tildaData, null, 2));
 
+  // Проверяем наличие payment и products
+  if (!tildaData.payment) {
+    console.error('Ошибка: поле payment отсутствует в данных от Тильды');
+    res.status(400).send('error');
+    return;
+  }
+
+  if (!tildaData.payment.products || !Array.isArray(tildaData.payment.products)) {
+    console.error('Ошибка: payment.products отсутствует или не является массивом');
+    res.status(400).send('error');
+    return;
+  }
+
   // Формируем массив товаров для CRM
   const cart = [];
   tildaData.payment.products.forEach((product) => {
     const productName = product.name; // Например, "Аріна"
-    const color = product.options[0]?.variant; // Например, "дим"
-    const quantity = product.quantity; // Количество
-    const amount = product.amount; // Общая сумма за этот тип товара
+    const color = product.options && product.options[0]?.variant; // Например, "дим"
+    const quantity = product.quantity || 0; // Количество
+    const amount = product.amount || 0; // Общая сумма за этот тип товара
 
     // Находим product_id в arrProduct
     const productMapping = arrProduct.find((item) => item[productName]);
-    const productId = productMapping && productMapping[productName][color];
+    const productId = productMapping && color && productMapping[productName][color];
 
     if (productId) {
       cart.push({
@@ -42,13 +66,13 @@ app.post('/log', async (req, res) => {
         product_bonus_sum: 0,
       });
     } else {
-      console.warn(`Не найден product_id для ${productName} с цветом ${color}`);
+      console.warn(`Не найден product_id для ${productName} с цветом ${color || 'не указан'}`);
     }
   });
 
   // Формируем итоговый объект для CRM
   const crmData = {
-    number: 100, // Используем orderid или 100 по умолчанию
+    number: tildaData.payment.orderid ? parseInt(tildaData.payment.orderid) : 100, // Используем orderid или 100 по умолчанию
     status: 1,
     channel: 'АПІ',
     cart: cart,
@@ -71,18 +95,29 @@ app.post('/log', async (req, res) => {
 
   // Отправляем данные в CRM
   try {
-    const crmResponse = await fetch('https://api.dntrade.com.ua/orders/upload', {
+    const crmResponse = await fetch('https://api.dntrade.com.ua/orders_upload', {
       method: 'POST',
       headers: {
         'accept': 'application/json',
-        'ApiKey': 'x2kugbdjmkc5z083thxqkgrfxg8cf7smusq8gpbiznc4oxekq9xra',
+        'ApiKey': 'x2kugbdjmkcS2083thxqgrfxgbcF7smus8gbibznC40xekq9xra',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(crmData),
     });
 
-    const crmResponseData = await crmResponse.json();
-    console.log('Ответ от CRM:', JSON.stringify(crmResponseData, null, 2));
+    // Логируем статус ответа
+    console.log('Статус ответа от CRM:', crmResponse.status, crmResponse.statusText);
+
+    // Пытаемся получить тело ответа
+    let crmResponseData;
+    try {
+      crmResponseData = await crmResponse.json();
+      console.log('Ответ от CRM (JSON):', JSON.stringify(crmResponseData, null, 2));
+    } catch (jsonError) {
+      console.error('Не удалось распарсить JSON от CRM:', jsonError.message);
+      const crmResponseText = await crmResponse.text();
+      console.log('Ответ от CRM (текст):', crmResponseText);
+    }
 
     if (crmResponse.ok) {
       res.status(200).send('ok'); // Тильда ждёт "ok"
