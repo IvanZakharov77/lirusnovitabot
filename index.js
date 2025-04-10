@@ -32,7 +32,14 @@ app.post('/log', async (req, res) => {
   // Выводим полученные данные для отладки
   console.log('Получено с сайта:', JSON.stringify(tildaData, null, 2));
 
-  // Проверяем наличие payment и products
+  // Проверяем, является ли это тестовым сообщением от Тильды
+  if (tildaData.test === 'test') {
+    console.log('Это тестовое сообщение от Тильды');
+    res.status(200).send('ok'); // Тильда ждёт "ok"
+    return;
+  }
+
+  // Проверяем наличие payment и products для реального заказа
   if (!tildaData.payment) {
     console.error('Ошибка: поле payment отсутствует в данных от Тильды');
     res.status(400).send('error');
