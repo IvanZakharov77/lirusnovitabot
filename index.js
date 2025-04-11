@@ -15,13 +15,11 @@ const arrProduct = [
   },
 ];
 
-// Логируем все входящие запросы для отладки
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// Обработчик для корневого маршрута
 app.get('/', (req, res) => {
   res.send('Сервер работает. Используйте POST /log для Webhook.');
 });
@@ -29,17 +27,14 @@ app.get('/', (req, res) => {
 app.post('/log', async (req, res) => {
   const tildaData = req.body;
 
-  // Выводим полученные данные для отладки
   console.log('Получено с сайта:', JSON.stringify(tildaData, null, 2));
 
-  // Проверяем, является ли это тестовым сообщением от Тильды
   if (tildaData.test === 'test') {
     console.log('Это тестовое сообщение от Тильды');
     res.status(200).send('ok'); // Тильда ждёт "ok"
     return;
   }
 
-  // Проверяем наличие payment и products для реального заказа
   if (!tildaData.payment) {
     console.error('Ошибка: поле payment отсутствует в данных от Тильды');
     res.status(400).send('error');
@@ -55,10 +50,10 @@ app.post('/log', async (req, res) => {
   // Формируем массив товаров для CRM
   const cart = [];
   tildaData.payment.products.forEach((product) => {
-    const productName = product.name; // Например, "Аріна"
-    const color = product.options && product.options[0]?.variant; // Например, "дим"
+    const productName = product.name;
+    const color = product.options && product.options[0]?.variant; // цвет
     const quantity = product.quantity || 0; // Количество
-    const amount = product.amount || 0; // Общая сумма за этот тип товара
+    const amount = product.price || 0; // Общая сумма за этот тип товара
 
     // Находим product_id в arrProduct
     const productMapping = arrProduct.find((item) => item[productName]);
